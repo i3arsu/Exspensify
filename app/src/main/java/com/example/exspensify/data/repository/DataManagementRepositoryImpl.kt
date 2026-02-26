@@ -8,6 +8,8 @@ import com.example.exspensify.data.local.dao.CategoryDao
 import com.example.exspensify.data.local.dao.TransactionDao
 import com.example.exspensify.data.local.database.DefaultCategories
 import com.example.exspensify.data.local.database.ExpensifyDatabase
+import com.example.exspensify.data.local.entity.TransactionEntity
+import com.example.exspensify.data.local.entity.TransactionType
 import com.example.exspensify.domain.repository.DataManagementRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -115,15 +117,113 @@ class DataManagementRepositoryImpl @Inject constructor(
     }
 
     override suspend fun importTransactionsFromCSV(uri: Uri): Resource<Int> {
-        // TODO: Implement CSV import functionality
-        // This would involve:
-        // 1. Reading CSV file from URI
-        // 2. Parsing CSV rows
-        // 3. Validating data
-        // 4. Matching categories or creating new ones
-        // 5. Inserting transactions in a transaction block
-        // 6. Handling duplicates
-        return Resource.Error("Import feature not yet implemented")
+        return withContext(Dispatchers.IO) {
+            try {
+                val allCategories = categoryDao.getAllCategoriesOnce()
+                val categoryByName = allCategories.associateBy { it.name.trim().lowercase() }
+                val otherCategory = allCategories.find { it.name.equals("other", ignoreCase = true) }
+                    ?: allCategories.firstOrNull()
+                    ?: return@withContext Resource.Error("No categories available for import")
+
+                val toInsert = mutableListOf<TransactionEntity>()
+                var skipped = 0
+
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    stream.bufferedReader().use { reader ->
+                        val headerLine = reader.readLine()
+                            ?: return@withContext Resource.Error("File is empty")
+                        val headers = parseCsvLine(headerLine).map { it.trim().lowercase() }
+
+                        val dateIdx = headers.indexOf("date")
+                        val titleIdx = headers.indexOf("title")
+                        val amountIdx = headers.indexOf("amount")
+                        val typeIdx = headers.indexOf("type")
+                        val categoryIdx = headers.indexOf("category")
+                        val descIdx = headers.indexOf("description")
+
+                        if (listOf(dateIdx, titleIdx, amountIdx, typeIdx).any { it == -1 }) {
+                            return@withContext Resource.Error(
+                                "Invalid CSV: missing required columns (Date, Title, Amount, Type)"
+                            )
+                        }
+
+                        val dateFormatter = java.time.format.DateTimeFormatter
+                            .ofPattern("yyyy-MM-dd HH:mm:ss")
+
+                        reader.forEachLine { line ->
+                            if (line.isBlank()) return@forEachLine
+                            try {
+                                val cols = parseCsvLine(line)
+                                val required = maxOf(dateIdx, titleIdx, amountIdx, typeIdx)
+                                if (cols.size <= required) { skipped++; return@forEachLine }
+
+                                val date = java.time.LocalDateTime.parse(
+                                    cols[dateIdx].trim(), dateFormatter
+                                )
+                                val title = cols[titleIdx].trim()
+                                if (title.isBlank()) { skipped++; return@forEachLine }
+
+                                val amount = cols[amountIdx].trim().toDoubleOrNull()
+                                if (amount == null || amount <= 0) { skipped++; return@forEachLine }
+
+                                val type = when (cols[typeIdx].trim().uppercase()) {
+                                    "INCOME" -> TransactionType.INCOME
+                                    "EXPENSE" -> TransactionType.EXPENSE
+                                    else -> { skipped++; return@forEachLine }
+                                }
+
+                                val catName = if (categoryIdx != -1 && categoryIdx < cols.size) {
+                                    cols[categoryIdx].trim().lowercase()
+                                } else ""
+                                val resolvedCategory = categoryByName[catName] ?: otherCategory
+
+                                val description = if (descIdx != -1 && descIdx < cols.size) {
+                                    cols[descIdx].trim().ifBlank { null }
+                                } else null
+
+                                toInsert.add(
+                                    TransactionEntity(
+                                        id = 0L,
+                                        title = title,
+                                        amount = amount,
+                                        type = type,
+                                        categoryId = resolvedCategory!!.id,
+                                        date = date,
+                                        description = description
+                                    )
+                                )
+                            } catch (e: Exception) {
+                                skipped++
+                            }
+                        }
+                    }
+                } ?: return@withContext Resource.Error("Could not open file")
+
+                if (toInsert.isEmpty()) {
+                    return@withContext Resource.Error(
+                        "No valid transactions found" +
+                                if (skipped > 0) " ($skipped rows skipped)" else ""
+                    )
+                }
+
+                database.withTransaction {
+                    transactionDao.insertAll(toInsert)
+                }
+
+                android.util.Log.i(
+                    "DataManagement",
+                    "Imported ${toInsert.size} transactions, skipped $skipped"
+                )
+                Resource.Success(toInsert.size)
+
+            } catch (e: java.io.IOException) {
+                android.util.Log.e("DataManagement", "CSV import IO error", e)
+                Resource.Error("Failed to read file: ${e.localizedMessage}")
+            } catch (e: Exception) {
+                android.util.Log.e("DataManagement", "CSV import error", e)
+                Resource.Error(e.localizedMessage ?: "Failed to import transactions")
+            }
+        }
     }
 
     private fun escapeCsvValue(value: String): String {
@@ -134,5 +234,23 @@ class DataManagementRepositoryImpl @Inject constructor(
         } else {
             escaped
         }
+    }
+
+    private fun parseCsvLine(line: String): List<String> {
+        val result = mutableListOf<String>()
+        val current = StringBuilder()
+        var inQuotes = false
+        for (ch in line) {
+            when {
+                ch == '"' -> inQuotes = !inQuotes
+                ch == ',' && !inQuotes -> {
+                    result.add(current.toString())
+                    current.clear()
+                }
+                else -> current.append(ch)
+            }
+        }
+        result.add(current.toString())
+        return result
     }
 }

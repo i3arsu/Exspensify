@@ -1,10 +1,12 @@
 package com.example.exspensify.di
 
+import com.example.exspensify.data.repository.BudgetRepositoryImpl
 import com.example.exspensify.data.repository.CategoryRepositoryImpl
 import com.example.exspensify.data.repository.DataManagementRepositoryImpl
 import com.example.exspensify.data.repository.SettingsRepositoryImpl
 import com.example.exspensify.data.repository.StatisticsRepositoryImpl
 import com.example.exspensify.data.repository.TransactionRepositoryImpl
+import com.example.exspensify.domain.repository.BudgetRepository
 import com.example.exspensify.domain.repository.CategoryRepository
 import com.example.exspensify.domain.repository.DataManagementRepository
 import com.example.exspensify.domain.repository.SettingsRepository
@@ -49,4 +51,10 @@ abstract class RepositoryModule {
     abstract fun bindDataManagementRepository(
         dataManagementRepositoryImpl: DataManagementRepositoryImpl
     ): DataManagementRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindBudgetRepository(
+        budgetRepositoryImpl: BudgetRepositoryImpl
+    ): BudgetRepository
 }

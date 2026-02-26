@@ -22,4 +22,9 @@ sealed class Routes(val route: String) {
             return "add_edit_category/${categoryId ?: "new"}"
         }
     }
+
+    object AddEditBudget : Routes("add_edit_budget/{budgetId}") {
+        fun createRoute(budgetId: String? = null): String =
+            "add_edit_budget/${budgetId ?: "new"}"
+    }
 }

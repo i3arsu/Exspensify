@@ -25,6 +25,7 @@ import com.example.exspensify.core.util.UiEvent
 import com.example.exspensify.domain.model.Budget
 import com.example.exspensify.domain.model.BudgetPeriod
 import com.example.exspensify.ui.budget.BudgetEvent
+import com.example.exspensify.core.navigation.Routes
 import com.example.exspensify.ui.budget.BudgetViewModel
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -53,8 +54,7 @@ fun BudgetScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
-                // TODO: replace with Routes.AddEditBudget.createRoute() after Task 11
-                onClick = { onNavigate("add_edit_budget/new") }
+                onClick = { onNavigate(Routes.AddEditBudget.createRoute()) }
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Budget")
             }
@@ -127,8 +127,7 @@ fun BudgetScreen(
                     items(uiState.budgets, key = { it.id }) { budget ->
                         BudgetItemCard(
                             budget = budget,
-                            // TODO: replace with Routes.AddEditBudget.createRoute(budget.id) after Task 11
-                            onEdit = { onNavigate("add_edit_budget/${budget.id}") },
+                            onEdit = { onNavigate(Routes.AddEditBudget.createRoute(budget.id)) },
                             onDelete = { budgetToDelete = budget }
                         )
                     }

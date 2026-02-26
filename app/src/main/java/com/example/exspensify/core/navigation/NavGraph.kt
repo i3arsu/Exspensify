@@ -14,6 +14,7 @@ import androidx.navigation.navArgument
 import com.example.exspensify.ui.home.HomeScreen
 import com.example.exspensify.ui.screens.AddEditCategoryScreen
 import com.example.exspensify.ui.screens.AddEditTransactionScreen
+import com.example.exspensify.ui.screens.AddEditBudgetScreen
 import com.example.exspensify.ui.screens.BudgetScreen
 import com.example.exspensify.ui.screens.CategoryListScreen
 import com.example.exspensify.ui.screens.StatisticsScreen
@@ -43,7 +44,11 @@ fun NavigationGraph(
         }
 
         composable(Routes.Budgets.route) {
-            // TODO: Add BudgetScreen later
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                BudgetScreen(
+                    onNavigate = { route -> navController.navigate(route) }
+                )
+            }
         }
 
         composable(Routes.Settings.route) {
@@ -99,6 +104,22 @@ fun NavigationGraph(
             AddEditCategoryScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
+        }
+
+        composable(
+            route = "add_edit_budget/{budgetId}",
+            arguments = listOf(
+                navArgument("budgetId") {
+                    type = NavType.StringType
+                    defaultValue = "new"
+                }
+            )
+        ) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                AddEditBudgetScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
     }
 }
